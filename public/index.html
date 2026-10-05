@@ -8,6 +8,7 @@
 :root{--bg:#f2f5f3;--panel:#fff;--ink:#14211c;--mute:#5d6b65;--line:#d6ddd9;--acc:#0f766e;--accInk:#fff;--warn:#b45309;--warnBg:#fef3c7;--bad:#b91c1c}
 @media (prefers-color-scheme:dark){:root{--bg:#0f1714;--panel:#17221e;--ink:#e6efeb;--mute:#93a39b;--line:#2b3a34;--acc:#2dd4bf;--accInk:#062622;--warn:#fbbf24;--warnBg:#3a2c0a;--bad:#f87171}}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Manrope",ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}
 header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px;padding:14px 20px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
 h1{font-size:18px;margin:0;letter-spacing:-.01em}
@@ -61,24 +62,27 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
   <div class="card tbl"><table><thead><tr><th>Business</th><th>Phone</th><th>Status</th><th>Notes</th><th></th></tr></thead><tbody id="lb"></tbody></table>
   <p class="muted" id="le"></p></div>
 </section>
-
+ 
 <section id="find">
   <div class="card">
     <div class="row">
-      <label>Business type<input id="fk" placeholder="e.g. barber shop"></label>
-      <label>Area<input id="fa" placeholder="e.g. Lekki, Lagos"></label>
-      <label style="max-width:170px">Pages of results<select id="fp"><option>1</option><option selected>2</option><option>3</option></select></label>
+      <label style="max-width:200px">Source<select id="fv"><option value="osm">OpenStreetMap (free)</option><option value="google">Google Maps</option></select></label>
+      <label id="lk">Business type<select id="fc"></select></label>
+      <label id="lw" hidden>Business type<input id="fk" placeholder="e.g. barber shop"></label>
+      <label>Area<input id="fa" placeholder="e.g. Austin, TX"></label>
+      <label id="lph" style="max-width:150px;flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="fph" checked style="width:auto">Only with phone</label>
+      <label id="lpg" hidden style="max-width:170px">Pages of results<select id="fp"><option>1</option><option selected>2</option><option>3</option></select></label>
       <button class="btn" id="fg">Find businesses without a website</button>
     </div>
-    <p class="hint">Only businesses with no website listed on Google Maps are added. Duplicates are skipped.</p>
+    <p class="hint">Only businesses with no website listed are added. Duplicates are skipped. OpenStreetMap is free but community-edited, so some "no website" leads may actually have one. Google Maps is more complete.</p>
     <p id="fs2" class="hint"></p>
   </div>
 </section>
-
+ 
 <section id="fu">
   <div class="card"><h2 style="margin:0 0 12px;font-size:16px">Follow-ups</h2><div id="fl"></div></div>
 </section>
-
+ 
 <section id="set">
   <div class="card">
     <h2 style="margin:0 0 12px;font-size:16px">Reminders</h2>
@@ -87,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
   </div>
 </section>
 </main>
-
+ 
 <dialog id="dlg">
   <form method="dialog" id="df">
     <h3 style="margin:0 0 12px" id="dt">Set follow-up</h3>
@@ -98,7 +102,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
 </dialog>
 <dialog id="lg"><form id="lf"><h3 style="margin:0 0 12px">Sign in</h3><label>Password<input type="password" id="lp" required autocomplete="current-password"></label><p class="hint" id="le2"></p><div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn">Sign in</button></div></form></dialog>
 <div id="toast" role="status"></div>
-
+ 
 <script>
 const STATUS=["New","Called","No answer","Interested","Follow-up","Closed","Not interested"];
 const $=s=>document.querySelector(s);
@@ -110,12 +114,12 @@ const persist=l=>api("leads",{method:"PUT",body:JSON.stringify(l)}).catch(e=>toa
 async function load(){try{S.leads=(await api("leads")).leads;render()}catch(e){}}
 function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display="none",4000)}
 const fmt=d=>new Date(d).toLocaleString([],{dateStyle:"medium",timeStyle:"short"});
-
+ 
 $("#nav").onclick=e=>{const b=e.target.closest("button");if(!b)return;document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("on",x===b));document.querySelectorAll("section").forEach(s=>s.classList.toggle("on",s.id===b.dataset.t));render()};
-
+ 
 $("#fs").innerHTML='<option value="">All</option>'+STATUS.map(s=>`<option>${s}</option>`).join("");
 $("#q").oninput=$("#fs").onchange=renderLeads;
-
+ 
 function renderLeads(){
   const q=$("#q").value.toLowerCase(),f=$("#fs").value;
   const rows=S.leads.filter(l=>(!f||l.status===f)&&(!q||(l.name+l.phone+l.address).toLowerCase().includes(q)));
@@ -132,16 +136,16 @@ $("#lb").onclick=e=>{const b=e.target.closest("button");if(!b)return;const id=b.
   if(b.dataset.a==="call")callLead(l);
   if(b.dataset.a==="fu")openFu(l);
   if(b.dataset.a==="del"&&confirm("Delete "+l.name+"?")){api("leads?id="+encodeURIComponent(id),{method:"DELETE"}).catch(e=>toast(e.message));S.leads=S.leads.filter(x=>x.id!==id);render()}};
-
+ 
 async function callLead(l){
   try{await api("call",{method:"POST",body:JSON.stringify({id:l.id})});toast("Calling "+l.name+"...");if(l.status==="New")l.status="Called";l.lastCall=Date.now();renderLeads()}
   catch(e){toast("Call failed: "+e.message)}
 }
-
+ 
 let fuId=null;
 function openFu(l){fuId=l.id;$("#dt").textContent="Follow up with "+l.name;const d=new Date(Date.now()+864e5);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());d.setHours(10,0);$("#dd").value=l.followAt?new Date(l.followAt-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,16):d.toISOString().slice(0,16);$("#dn").value=l.followNote||"";$("#dlg").showModal()}
 $("#dlg").onclose=()=>{if($("#dlg").returnValue!=="ok")return;const l=S.leads.find(x=>x.id===fuId);if(!l)return;l.followAt=new Date($("#dd").value).getTime();l.followNote=$("#dn").value;l.notified=false;l.status="Follow-up";persist(l);render();toast("Follow-up saved")};
-
+ 
 function renderFu(){
   const list=S.leads.filter(l=>l.followAt).sort((a,b)=>a.followAt-b.followAt),now=Date.now();
   $("#fl").innerHTML=list.length?list.map(l=>`<div class="fu${l.followAt<=now?" due":""}"><div><b>${esc(l.name)}</b> <span class="muted">${esc(l.phone||"No number")}</span><small class="muted" style="display:block">${l.followAt<=now?"Due now · ":""}${fmt(l.followAt)}${l.followNote?" · "+esc(l.followNote):""}</small></div><div class="acts"><button class="btn sm" data-id="${l.id}" data-a="call"${l.phone?"":" disabled"}>Call</button><button class="btn ghost sm" data-id="${l.id}" data-a="fu">Reschedule</button><button class="btn ghost sm" data-id="${l.id}" data-a="done">Mark done</button></div></div>`).join(""):'<p class="muted">Nothing scheduled. Use Follow up on a lead when they ask you to call back.</p>';
@@ -149,7 +153,7 @@ function renderFu(){
 $("#fl").onclick=e=>{const b=e.target.closest("button");if(!b)return;const l=S.leads.find(x=>x.id===b.dataset.id);if(!l)return;
   if(b.dataset.a==="call")callLead(l);if(b.dataset.a==="fu")openFu(l);
   if(b.dataset.a==="done"){delete l.followAt;delete l.followNote;persist(l);render()}};
-
+ 
 function checkDue(){
   const now=Date.now();let fresh=[];
   S.leads.forEach(l=>{if(l.followAt&&l.followAt<=now&&!l.notified){l.notified=true;fresh.push(l)}});
@@ -158,23 +162,27 @@ function checkDue(){
   $("#dueN").hidden=!n;$("#dueN").textContent=n;document.title=(n?"("+n+") ":"")+"Lead desk";
 }
 setInterval(checkDue,20000);
-
+ 
 async function findLeads(){
-  const kw=$("#fk").value.trim(),ar=$("#fa").value.trim(),st=$("#fs2");
+  const v=$("#fv").value,kw=v==="osm"?$("#fc").value:$("#fk").value.trim(),ar=$("#fa").value.trim(),st=$("#fs2");
   if(!kw||!ar){st.textContent="Enter a business type and an area.";return}
-  const b=$("#fg");b.disabled=true;st.textContent="Searching Google Maps...";
-  try{const d=await api("search",{method:"POST",body:JSON.stringify({keyword:kw,area:ar,pages:+$("#fp").value})});await load();st.textContent=`Checked ${d.seen} businesses. ${d.noSite} have no website. ${d.added} new leads added.`}
+  const b=$("#fg");b.disabled=true;st.textContent="Searching...";
+  try{const d=await api("search",{method:"POST",body:JSON.stringify({provider:v,keyword:kw,area:ar,pages:+$("#fp").value,phoneOnly:$("#fph").checked})});await load();st.textContent=`Checked ${d.seen} businesses. ${d.noSite} qualify. ${d.added} new leads added.`}
   catch(err){st.textContent="Search failed: "+err.message}
   b.disabled=false;
 }
 $("#fg").onclick=findLeads;
-
+const CATS=[["hair","Hair salon / barber"],["beauty","Beauty / nails"],["restaurant","Restaurant"],["cafe","Cafe"],["bakery","Bakery"],["auto","Auto repair"],["plumber","Plumber"],["electrician","Electrician"],["hvac","HVAC"],["roofing","Roofing"],["landscaping","Landscaping"],["laundry","Laundry / dry cleaning"],["gym","Gym"],["dentist","Dentist"],["florist","Florist"]];
+$("#fc").innerHTML=CATS.map(c=>`<option value="${c[0]}">${c[1]}</option>`).join("");
+$("#fv").onchange=()=>{const o=$("#fv").value==="osm";$("#lk").hidden=!o;$("#lph").hidden=!o;$("#lw").hidden=o;$("#lpg").hidden=o};
+$("#fv").onchange();
+ 
 $("#nt").onclick=async()=>{try{const p=await Notification.requestPermission();toast(p==="granted"?"Reminder notifications on":"Notifications blocked in this browser")}catch(e){toast("Notifications aren't supported here")}};
 $("#exp").onclick=()=>{const c=v=>'"'+String(v??"").replace(/"/g,'""')+'"';const csv=["Name,Phone,Address,Status,Notes,Follow-up"].concat(S.leads.map(l=>[l.name,l.phone,l.address,l.status,l.notes,l.followAt?new Date(l.followAt).toISOString():""].map(c).join(","))).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="leads.csv";a.click()};
-
+ 
 function render(){renderLeads();renderFu();checkDue()}
 render();load();
-
+ 
 function showLogin(){const d=$("#lg");if(!d.open)d.showModal()}
 $("#lg").oncancel=e=>e.preventDefault();
 $("#lf").onsubmit=async e=>{e.preventDefault();try{const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:$("#lp").value})});if(!r.ok)throw new Error((await r.json()).error||"Wrong password");$("#lp").value="";$("#le2").textContent="";$("#lg").close();load()}catch(err){$("#le2").textContent=err.message}};
@@ -182,3 +190,4 @@ $("#lo").onclick=async()=>{await fetch("/api/login",{method:"DELETE"});S.leads=[
 </script>
 </body>
 </html>
+ 
